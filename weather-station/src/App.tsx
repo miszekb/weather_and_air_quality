@@ -13,6 +13,7 @@ import {
   ChakraProvider,
   extendTheme,
   useColorModeValue,
+  Spinner,
 } from "@chakra-ui/react";
 
 import {
@@ -22,6 +23,7 @@ import {
   FaWind,
   FaMoon,
   FaSun,
+  FaSync,
 } from "react-icons/fa";
 
 import { Line } from "react-chartjs-2";
@@ -57,7 +59,7 @@ const chartOptions = {
 };
 
 function MetricCard({ title, value, unit, icon, color }) {
-  const bg = useColorModeValue("gray.200", "gray.800"); // slightly darker in light mode
+  const bg = useColorModeValue("gray.200", "gray.800");
   const textColor = useColorModeValue("gray.800", "whiteAlpha.900");
   const subTextColor = useColorModeValue("gray.600", "gray.400");
 
@@ -86,29 +88,37 @@ function MetricChart({ title, metricKey, historyData, color }) {
   const [view, setView] = useState("today");
   const bg = useColorModeValue("gray.200", "gray.800");
 
-  // Get current date in YYYY-MM-DD
   const todayString = new Date().toISOString().split("T")[0];
 
-  // Filter data for today
   const todayData = historyData
     .filter((d) => d.timestamp.startsWith(todayString))
     .map((d) => ({
-      time: new Date(d.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      time: new Date(d.timestamp).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       value: d[metricKey],
     }));
 
-  // Map historical data for months
   const historicalData = historyData.map((d) => ({
-    time: new Date(d.timestamp).toLocaleDateString("en-US", { month: "short" }),
+    time: new Date(d.timestamp).toLocaleDateString("en-US", {
+      month: "short",
+    }),
     value: d[metricKey],
   }));
 
   const chartData = {
-    labels: view === "today" ? todayData.map((d) => d.time) : historicalData.map((d) => d.time),
+    labels:
+      view === "today"
+        ? todayData.map((d) => d.time)
+        : historicalData.map((d) => d.time),
     datasets: [
       {
         label: title,
-        data: view === "today" ? todayData.map((d) => d.value) : historicalData.map((d) => d.value),
+        data:
+          view === "today"
+            ? todayData.map((d) => d.value)
+            : historicalData.map((d) => d.value),
         borderColor: color,
         backgroundColor: color,
       },
@@ -125,10 +135,16 @@ function MetricChart({ title, metricKey, historyData, color }) {
       _hover={{ transform: "translateY(-5px)" }}
     >
       <HStack justify="space-between" mb={4}>
-        <Heading size="md" color={useColorModeValue("gray.800", "whiteAlpha.900")}>
+        <Heading
+          size="md"
+          color={useColorModeValue("gray.800", "whiteAlpha.900")}
+        >
           {title}
         </Heading>
-        <Button size="sm" onClick={() => setView(view === "today" ? "history" : "today")}>
+        <Button
+          size="sm"
+          onClick={() => setView(view === "today" ? "history" : "today")}
+        >
           {view === "today" ? "History" : "Today"}
         </Button>
       </HStack>
@@ -144,33 +160,68 @@ function Dashboard() {
   const { colorMode, toggleColorMode } = useColorMode();
   const [latest, setLatest] = useState({});
   const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchLatest = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("http://192.168.1.37:5000/latest");
+      const data = await res.json();
+      setLatest(data);
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch("http://192.168.1.37:5000/history");
+      const data = await res.json();
+      setHistory(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   useEffect(() => {
-    fetch("http://192.168.1.37:5000/latest")
-      .then((res) => res.json())
-      .then((data) => setLatest(data))
-      .catch((err) => console.log(err));
-
-    fetch("http://192.168.1.37:5000/history")
-      .then((res) => res.json())
-      .then((data) => setHistory(data))
-      .catch((err) => console.log(err));
+    fetchLatest();
+    fetchHistory();
   }, []);
 
   const bg = useColorModeValue("gray.50", "gray.900");
 
   return (
-    <Box minH="100vh" minW="100vw" bg={bg} color="white" py={8}>
+    <Box minH="100vh" minW="100vw" bg={bg} py={8}>
       <Box maxW="1200px" mx="auto" px={4}>
         {/* Header */}
         <HStack justify="space-between" mb={6}>
-          <Heading size="lg" color={useColorModeValue("gray.800", "white")}>
+          <Heading
+            size="lg"
+            color={useColorModeValue("gray.800", "white")}
+          >
             Weather Station Dashboard
           </Heading>
-          <IconButton
-            icon={colorMode === "dark" ? <FaSun /> : <FaMoon />}
-            onClick={toggleColorMode}
-          />
+
+          <HStack spacing={3}>
+            <Button
+              leftIcon={loading ? <Spinner size="sm" /> : <Icon as={FaSync} />}
+              size="sm"
+              onClick={() => {
+                fetchLatest();
+                fetchHistory();
+              }}
+              isDisabled={loading}
+            >
+              Refresh
+            </Button>
+
+            <IconButton
+              icon={colorMode === "dark" ? <FaSun /> : <FaMoon />}
+              onClick={toggleColorMode}
+              size="sm"
+            />
+          </HStack>
         </HStack>
 
         {/* Latest Measurements */}
