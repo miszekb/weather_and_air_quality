@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import MetricChart from './MetricChart';
 import {
   Box,
   Heading,
@@ -26,38 +27,6 @@ import {
   FaSync,
 } from "react-icons/fa";
 
-import { Line } from "react-chartjs-2";
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-} from "chart.js";
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
-
-const theme = extendTheme({
-  config: { initialColorMode: "dark", useSystemColorMode: true },
-});
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
-};
-
 function MetricCard({ title, value, unit, icon, color }) {
   const bg = useColorModeValue("gray.200", "gray.800");
   const textColor = useColorModeValue("gray.800", "whiteAlpha.900");
@@ -84,78 +53,6 @@ function MetricCard({ title, value, unit, icon, color }) {
   );
 }
 
-function MetricChart({ title, metricKey, historyData, color }) {
-  const [view, setView] = useState("today");
-  const bg = useColorModeValue("gray.200", "gray.800");
-
-  const todayString = new Date().toISOString().split("T")[0];
-
-  const todayData = historyData
-    .filter((d) => d.timestamp.startsWith(todayString))
-    .map((d) => ({
-      time: new Date(d.timestamp).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      value: d[metricKey],
-    }));
-
-  const historicalData = historyData.map((d) => ({
-    time: new Date(d.timestamp).toLocaleDateString("en-US", {
-      month: "short",
-    }),
-    value: d[metricKey],
-  }));
-
-  const chartData = {
-    labels:
-      view === "today"
-        ? todayData.map((d) => d.time)
-        : historicalData.map((d) => d.time),
-    datasets: [
-      {
-        label: title,
-        data:
-          view === "today"
-            ? todayData.map((d) => d.value)
-            : historicalData.map((d) => d.value),
-        borderColor: color,
-        backgroundColor: color,
-      },
-    ],
-  };
-
-  return (
-    <Box
-      p={6}
-      borderRadius="xl"
-      bg={bg}
-      boxShadow="xl"
-      transition="0.3s"
-      _hover={{ transform: "translateY(-5px)" }}
-    >
-      <HStack justify="space-between" mb={4}>
-        <Heading
-          size="md"
-          color={useColorModeValue("gray.800", "whiteAlpha.900")}
-        >
-          {title}
-        </Heading>
-        <Button
-          size="sm"
-          onClick={() => setView(view === "today" ? "history" : "today")}
-        >
-          {view === "today" ? "History" : "Today"}
-        </Button>
-      </HStack>
-
-      <Box h={{ base: "250px", md: "320px" }} w="100%">
-        <Line data={chartData} options={chartOptions} />
-      </Box>
-    </Box>
-  );
-}
-
 function Dashboard() {
   const { colorMode, toggleColorMode } = useColorMode();
   const [latest, setLatest] = useState({});
@@ -165,7 +62,7 @@ function Dashboard() {
   const fetchLatest = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://192.168.1.37:5000/latest");
+      const res = await fetch("http://localhost:5000/latest");
       const data = await res.json();
       setLatest(data);
     } catch (err) {
@@ -176,7 +73,7 @@ function Dashboard() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch("http://192.168.1.37:5000/history");
+      const res = await fetch("http://localhost:5000/history");
       const data = await res.json();
       setHistory(data);
     } catch (err) {
@@ -189,7 +86,9 @@ function Dashboard() {
     fetchHistory();
   }, []);
 
+  // Define theme-related props
   const bg = useColorModeValue("gray.50", "gray.900");
+  const textColor = useColorModeValue("gray.800", "whiteAlpha.900");
 
   return (
     <Box minH="100vh" minW="100vw" bg={bg} py={8}>
@@ -274,17 +173,21 @@ function Dashboard() {
 
         {/* Charts */}
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
-          <MetricChart title="Temperature" metricKey="temperature" historyData={history} color="#4FD1C5" />
-          <MetricChart title="Temp2" metricKey="temp2" historyData={history} color="#63B3ED" />
-          <MetricChart title="PM2.5" metricKey="pm25" historyData={history} color="#F56565" />
-          <MetricChart title="NO2" metricKey="no2" historyData={history} color="#63B3ED" />
-          <MetricChart title="Humidity" metricKey="humidity" historyData={history} color="#9F7AEA" />
-          <MetricChart title="Pressure" metricKey="hPa" historyData={history} color="#F6AD55" />
+          <MetricChart title="Temperature" metricKey="temperature" historyData={history} color="#4FD1C5" bg={bg} textColor={textColor} />
+          <MetricChart title="Temp2" metricKey="temp2" historyData={history} color="#63B3ED" bg={bg} textColor={textColor} />
+          <MetricChart title="PM2.5" metricKey="pm25" historyData={history} color="#F56565" bg={bg} textColor={textColor} />
+          <MetricChart title="NO2" metricKey="no2" historyData={history} color="#63B3ED" bg={bg} textColor={textColor} />
+          <MetricChart title="Humidity" metricKey="humidity" historyData={history} color="#9F7AEA" bg={bg} textColor={textColor} />
+          <MetricChart title="Pressure" metricKey="hPa" historyData={history} color="#F6AD55" bg={bg} textColor={textColor} />
         </SimpleGrid>
       </Box>
     </Box>
   );
 }
+
+const theme = extendTheme({
+  config: { initialColorMode: "dark", useSystemColorMode: true },
+});
 
 export default function App() {
   return (
