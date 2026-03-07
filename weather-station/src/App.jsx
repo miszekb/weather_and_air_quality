@@ -62,7 +62,7 @@ function Dashboard() {
   const fetchLatest = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/latest");
+      const res = await fetch("/latest");
       const data = await res.json();
       setLatest(data);
     } catch (err) {
@@ -73,7 +73,7 @@ function Dashboard() {
 
   const fetchHistory = async () => {
     try {
-      const res = await fetch("http://localhost:5000/history");
+      const res = await fetch("/history");
       const data = await res.json();
       setHistory(data);
     } catch (err) {
