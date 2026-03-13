@@ -22,6 +22,9 @@ import {
   Legend,
 } from "chart.js";
 
+// Import color mapping for chart.js compatibility
+import { getChartColor } from './chartColors';
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -75,18 +78,21 @@ const MetricChart = ({ title, metricKey, historyData, color }) => {
         ? todayData.map((d) => d.value)
         : historicalData.map((d) => d.value);
 
+    // Convert Chakra UI color name to actual color for chart.js
+    const chartColor = getChartColor(color);
+
     return {
       labels,
       datasets: [
         {
           label: title,
           data,
-          borderColor: color,
-          backgroundColor: color,
+          borderColor: chartColor,
+          backgroundColor: chartColor,
         },
       ],
     };
-  }, [historyData, metricKey, view]); // Dependencies for memoization
+  }, [historyData, metricKey, view, color]); // Added color to dependencies
 
   // Dynamic background and text colors based on theme
   const bg = useColorModeValue("gray.100", "gray.800");

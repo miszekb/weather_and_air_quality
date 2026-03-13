@@ -70,8 +70,8 @@ function Dashboard() {
     try {
       // Combine both fetches into one call
       const [latestRes, historyRes] = await Promise.all([
-        fetch("/latest"),
-        fetch("/history")
+        fetch("https://weather.mbialecki.pl/latest"),
+        fetch("https://weather.mbialecki.pl/history")
       ]);
       
       if (!latestRes.ok || !historyRes.ok) {
