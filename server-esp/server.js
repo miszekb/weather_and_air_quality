@@ -75,14 +75,39 @@ app.get("/latest", (req, res) => {
 });
 
 /**
- * @route GET /history
+
+ * @route GET /today
  * @description Retrieves historical weather data for today.
- * @returns {Array} - A JSON response containing an array of historical readings or an empty array if no data is available.
+
+ * @returns {Array} - A JSON response containing an array of historical readings for the current day or an empty array if no data is available.
  */
-app.get("/history", (req, res) => {
+
+app.get("/today", (req, res) => {
   const filePath = getTodayFilePath();
   if (!fs.existsSync(filePath)) return res.json([]);
   res.json(JSON.parse(fs.readFileSync(filePath)));
+});
+
+/**
+ * @route GET /history
+ * @description Retrieves historical weather data for the entire last week.
+ * @returns {Array} - A JSON response containing an array of historical readings from the past 7 days or an empty array if no data is available.
+ */
+app.get("/history", (req, res) => {
+  const today = new Date();
+  const history = [];
+  
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(date.getDate() - i); // Subtract i days from the current day
+    const filePath = path.join(DATA_DIR, `${date.toISOString().split("T")[0]}.json`);
+    
+    if (fs.existsSync(filePath)) {
+      history.push(...JSON.parse(fs.readFileSync(filePath)));
+    }
+  }
+  
+  res.json(history);
 });
 
 // ------------------------

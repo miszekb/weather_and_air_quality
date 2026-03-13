@@ -15,6 +15,10 @@ import {
   extendTheme,
   useColorModeValue,
   Spinner,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
 } from "@chakra-ui/react";
 
 import {
@@ -58,32 +62,37 @@ function Dashboard() {
   const [latest, setLatest] = useState({});
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const fetchLatest = async () => {
+  const fetchWeatherData = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/latest");
-      const data = await res.json();
-      setLatest(data);
+      // Combine both fetches into one call
+      const [latestRes, historyRes] = await Promise.all([
+        fetch("/latest"),
+        fetch("/history")
+      ]);
+      
+      if (!latestRes.ok || !historyRes.ok) {
+        throw new Error(`API error: ${latestRes.status} ${historyRes.status}`);
+      }
+      
+      const latestData = await latestRes.json();
+      const historyData = await historyRes.json();
+      
+      setLatest(latestData);
+      setHistory(historyData);
     } catch (err) {
-      console.error(err);
-    }
-    setLoading(false);
-  };
-
-  const fetchHistory = async () => {
-    try {
-      const res = await fetch("/history");
-      const data = await res.json();
-      setHistory(data);
-    } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch weather data:", err);
+      setError("Failed to load weather data. Please try again later.");
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchLatest();
-    fetchHistory();
+    fetchWeatherData();
   }, []);
 
   // Define theme-related props
@@ -106,10 +115,7 @@ function Dashboard() {
             <Button
               leftIcon={loading ? <Spinner size="sm" /> : <Icon as={FaSync} />}
               size="sm"
-              onClick={() => {
-                fetchLatest();
-                fetchHistory();
-              }}
+              onClick={fetchWeatherData}
               isDisabled={loading}
             >
               Refresh
@@ -123,6 +129,14 @@ function Dashboard() {
           </HStack>
         </HStack>
 
+        {error && (
+          <Alert status="error" mb={6}>
+            <AlertIcon />
+            <AlertTitle>Network Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Latest Measurements */}
         <Box overflowX="auto" mb={8}>
           <SimpleGrid minChildWidth="140px" spacing={4}>
@@ -131,54 +145,54 @@ function Dashboard() {
               value={latest.temperature}
               unit="°C"
               icon={FaTemperatureHigh}
-              color="#4FD1C5"
+              color="teal.500"
             />
             <MetricCard
               title="Temp2"
               value={latest.temp2}
               unit="°C"
               icon={FaTemperatureHigh}
-              color="#63B3ED"
+              color="blue.500"
             />
             <MetricCard
               title="PM2.5"
               value={latest.pm25}
               unit="µg/m³"
               icon={FaSmog}
-              color="#F56565"
+              color="red.500"
             />
             <MetricCard
               title="NO2"
               value={latest.no2}
               unit="ppb"
               icon={FaWind}
-              color="#63B3ED"
+              color="blue.500"
             />
             <MetricCard
               title="Humidity"
               value={latest.humidity}
               unit="%"
               icon={FaTint}
-              color="#9F7AEA"
+              color="purple.500"
             />
             <MetricCard
               title="Pressure"
               value={latest.hPa}
               unit="hPa"
               icon={FaTemperatureHigh}
-              color="#F6AD55"
+              color="orange.500"
             />
           </SimpleGrid>
         </Box>
 
         {/* Charts */}
         <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
-          <MetricChart title="Temperature" metricKey="temperature" historyData={history} color="#4FD1C5" bg={bg} textColor={textColor} />
-          <MetricChart title="Temp2" metricKey="temp2" historyData={history} color="#63B3ED" bg={bg} textColor={textColor} />
-          <MetricChart title="PM2.5" metricKey="pm25" historyData={history} color="#F56565" bg={bg} textColor={textColor} />
-          <MetricChart title="NO2" metricKey="no2" historyData={history} color="#63B3ED" bg={bg} textColor={textColor} />
-          <MetricChart title="Humidity" metricKey="humidity" historyData={history} color="#9F7AEA" bg={bg} textColor={textColor} />
-          <MetricChart title="Pressure" metricKey="hPa" historyData={history} color="#F6AD55" bg={bg} textColor={textColor} />
+          <MetricChart title="Temperature" metricKey="temperature" historyData={history} color="teal.500" bg={bg} textColor={textColor} />
+          <MetricChart title="Temp2" metricKey="temp2" historyData={history} color="blue.500" bg={bg} textColor={textColor} />
+          <MetricChart title="PM2.5" metricKey="pm25" historyData={history} color="red.500" bg={bg} textColor={textColor} />
+          <MetricChart title="NO2" metricKey="no2" historyData={history} color="blue.500" bg={bg} textColor={textColor} />
+          <MetricChart title="Humidity" metricKey="humidity" historyData={history} color="purple.500" bg={bg} textColor={textColor} />
+          <MetricChart title="Pressure" metricKey="hPa" historyData={history} color="orange.500" bg={bg} textColor={textColor} />
         </SimpleGrid>
       </Box>
     </Box>
