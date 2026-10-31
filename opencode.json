@@ -14,12 +14,22 @@
         "qwen3-coder:30b": {
           "_launch": true,
           "name": "qwen3-coder:30b"
-        }
+        },
+	"qwen3.8:27b": {
+	 "_launch": true,
+	 "name": "qwen3.8:27b",
+	  "limit": { "context": 131072, "output": 8192 }	
+        },
+	"qwen3.8:27b-64k": {
+	 "_launch": true,
+	 "name": "qwen3.8:27b-64k",
+	  "limit": { "context": 131072, "output": 8192 }	
+        },
       },
       "name": "Ollama (local)",
       "npm": "@ai-sdk/openai-compatible",
       "options": {
-        "baseURL": "https://api.mbialecki.pl/v1"
+        "baseURL": "http://localhost:11434/v1"
       }
     }
   }

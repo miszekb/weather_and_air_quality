@@ -19,6 +19,9 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 // In-memory storage
 // ------------------------
 let latestReading = null;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_RANGE_DAYS = 92;
+const PM25_MAX = 1000; // readings above this are sensor glitches and are dropped
 
 // ------------------------
 // Helpers
@@ -54,7 +57,7 @@ app.post("/ping", (req, res) => {
     temperature,
     humidity,
     no2,
-    pm25,
+    pm25: pm25 > PM25_MAX ? undefined : pm25,
     temp2,
     hPa: hPa !== undefined ? Math.round(hPa + 22) : undefined,
     timestamp: new Date().toISOString(),
@@ -108,6 +111,52 @@ app.get("/history", (req, res) => {
   }
   
   res.json(history);
+});
+
+/**
+ * @route GET /history/available
+ * @description Reports the first and last day (UTC, YYYY-MM-DD) that have stored data.
+ * @returns {Object} - { from, to }, both null when nothing is stored yet.
+ */
+app.get("/history/available", (req, res) => {
+  const days = fs
+    .readdirSync(DATA_DIR)
+    .filter((name) => /^\d{4}-\d{2}-\d{2}\.json$/.test(name))
+    .map((name) => name.slice(0, 10))
+    .sort();
+  res.json({ from: days[0] ?? null, to: days.at(-1) ?? null });
+});
+
+/**
+ * @route GET /history/range?from=<ISO time>&to=<ISO time>
+ * @description Retrieves stored readings between two instants, oldest first.
+ * @returns {Array} - Readings in the range, or 400 if the range is invalid or longer than MAX_RANGE_DAYS.
+ */
+app.get("/history/range", (req, res) => {
+  const from = new Date(req.query.from);
+  const to = new Date(req.query.to);
+  if (isNaN(from) || isNaN(to) || from > to)
+    return res.status(400).json({ error: "Invalid from/to" });
+  if (to - from > MAX_RANGE_DAYS * DAY_MS)
+    return res.status(400).json({ error: `Range is limited to ${MAX_RANGE_DAYS} days` });
+
+  const readings = [];
+  const firstDay = Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate());
+  for (let day = firstDay; day <= to.getTime(); day += DAY_MS) {
+    const filePath = path.join(DATA_DIR, `${new Date(day).toISOString().split("T")[0]}.json`);
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      for (const reading of JSON.parse(fs.readFileSync(filePath))) {
+        const time = new Date(reading.timestamp);
+        if (time >= from && time <= to) readings.push(reading);
+      }
+    } catch (err) {
+      console.error(`Skipping unreadable ${filePath}:`, err.message);
+    }
+  }
+
+  readings.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  res.json(readings);
 });
 
 // ------------------------

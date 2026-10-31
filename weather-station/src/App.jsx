@@ -1,5 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import MetricChart from './MetricChart';
+import MetricCard from './MetricCard';
+import HistoryView from './HistoryView';
+import { useWeatherData, useNow } from './useWeatherData';
+import { METRICS, RANGES, toPoints, pointsInWindow, rangeWindow, getTrend, formatAgo } from './metrics';
+import { useI18n } from './i18nContext';
+import LanguageProvider from './LanguageProvider';
+import LanguageFlag from './LanguageFlag';
+import { LANGUAGES, LANGUAGE_NAMES } from './translations';
 import {
   Box,
   Heading,
@@ -8,9 +16,16 @@ import {
   HStack,
   Icon,
   Button,
+  ButtonGroup,
+  Badge,
+  Tabs,
+  TabList,
+  Tab,
+  TabPanels,
+  TabPanel,
   useColorMode,
   IconButton,
-  Flex,
+  Wrap,
   ChakraProvider,
   extendTheme,
   useColorModeValue,
@@ -21,179 +36,164 @@ import {
   AlertDescription,
 } from "@chakra-ui/react";
 
-import {
-  FaTemperatureHigh,
-  FaSmog,
-  FaTint,
-  FaWind,
-  FaMoon,
-  FaSun,
-  FaSync,
-} from "react-icons/fa";
+import { FaMoon, FaSun, FaSync } from "react-icons/fa";
 
-function MetricCard({ title, value, unit, icon, color }) {
-  const bg = useColorModeValue("gray.200", "gray.800");
-  const textColor = useColorModeValue("gray.800", "whiteAlpha.900");
-  const subTextColor = useColorModeValue("gray.600", "gray.400");
-
-  return (
-    <Flex
-      p={4}
-      borderRadius="xl"
-      bg={bg}
-      direction="column"
-      align="center"
-      justify="center"
-      w="100%"
-    >
-      <Icon as={icon} boxSize={8} color={color} mb={2} />
-      <Text fontSize="sm" color={subTextColor}>
-        {title}
-      </Text>
-      <Text fontSize="2xl" fontWeight="bold" color={textColor}>
-        {value ?? "-"} {unit}
-      </Text>
-    </Flex>
-  );
-}
+// The station reports about every 10 minutes; flag the data when it has been silent for longer.
+const STALE_AFTER = 15 * 60 * 1000;
 
 function Dashboard() {
   const { colorMode, toggleColorMode } = useColorMode();
-  const [latest, setLatest] = useState({});
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const { t, lang, setLang } = useI18n();
+  const { latest, sortedHistory, loading, error, refresh } = useWeatherData();
+  const [range, setRange] = useState("24h");
+  const [tab, setTab] = useState(0);
+  const now = useNow(30 * 1000);
 
-  const fetchWeatherData = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Combine both fetches into one call
-      const [latestRes, historyRes] = await Promise.all([
-        fetch("https://weather.mbialecki.pl/latest"),
-        fetch("https://weather.mbialecki.pl/history")
-      ]);
-      
-      if (!latestRes.ok || !historyRes.ok) {
-        throw new Error(`API error: ${latestRes.status} ${historyRes.status}`);
-      }
-      
-      const latestData = await latestRes.json();
-      const historyData = await historyRes.json();
-      
-      setLatest(latestData);
-      setHistory(historyData);
-    } catch (err) {
-      console.error("Failed to fetch weather data:", err);
-      setError("Failed to load weather data. Please try again later.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const pointsByKey = useMemo(
+    () => Object.fromEntries(METRICS.map((m) => [m.key, toPoints(sortedHistory, m.key)])),
+    [sortedHistory]
+  );
 
-  useEffect(() => {
-    fetchWeatherData();
-  }, []);
-
-  // Define theme-related props
   const bg = useColorModeValue("gray.50", "gray.900");
-  const textColor = useColorModeValue("gray.800", "whiteAlpha.900");
+  const headingColor = useColorModeValue("gray.800", "white");
+  const subTextColor = useColorModeValue("gray.600", "gray.400");
+
+  const latestTime = latest?.timestamp ? new Date(latest.timestamp).getTime() : null;
+  const isStale = latestTime !== null && now - latestTime > STALE_AFTER;
+  const sparkWindow = rangeWindow("24h", now);
+  const liveWindow = useMemo(() => rangeWindow(range, now), [range, now]);
 
   return (
     <Box minH="100vh" minW="100vw" bg={bg} py={8}>
       <Box maxW="1200px" mx="auto" px={4}>
         {/* Header */}
-        <HStack justify="space-between" mb={6}>
-          <Heading
-            size="lg"
-            color={useColorModeValue("gray.800", "white")}
-          >
-            Weather Station Dashboard
-          </Heading>
+        <Wrap justify="space-between" align="center" spacing={4} mb={6}>
+          <Box>
+            <Heading size={{ base: "md", md: "lg" }} color={headingColor}>
+              {t("app.title")}
+            </Heading>
+            <HStack mt={1} spacing={2} fontSize="sm" color={subTextColor} flexWrap="wrap">
+              <Text>
+                {latestTime === null
+                  ? t("header.noReading")
+                  : t("header.lastReading", { ago: formatAgo(now - latestTime, t) })}
+              </Text>
+              {isStale && <Badge colorScheme="orange" whiteSpace="normal">{t("header.stale")}</Badge>}
+            </HStack>
+          </Box>
 
-          <HStack spacing={3}>
+          <Wrap spacing={2} align="center">
+            {tab === 0 && (
+            <ButtonGroup size="sm" isAttached variant="outline" aria-label={t("header.range")}>
+              {RANGES.map((id) => (
+                <Button
+                  key={id}
+                  onClick={() => setRange(id)}
+                  colorScheme={range === id ? "blue" : undefined}
+                  variant={range === id ? "solid" : "outline"}
+                  aria-pressed={range === id}
+                >
+                  {t(`range.${id}`)}
+                </Button>
+              ))}
+            </ButtonGroup>
+            )}
+
+            <HStack spacing={1} role="group" aria-label={t("header.language")}>
+              {LANGUAGES.map((code) => (
+                <IconButton
+                  key={code}
+                  aria-label={LANGUAGE_NAMES[code]}
+                  title={LANGUAGE_NAMES[code]}
+                  aria-pressed={lang === code}
+                  icon={<LanguageFlag code={code} />}
+                  onClick={() => setLang(code)}
+                  size="sm"
+                  variant="ghost"
+                  borderRadius="full"
+                  opacity={lang === code ? 1 : 0.5}
+                  boxShadow={lang === code ? "0 0 0 2px var(--chakra-colors-blue-400)" : "none"}
+                />
+              ))}
+            </HStack>
+
+            {/* Icon only on narrow screens so the controls fit */}
+            <IconButton
+              display={{ base: "inline-flex", sm: "none" }}
+              aria-label={t("header.refresh")}
+              icon={loading ? <Spinner size="sm" /> : <Icon as={FaSync} />}
+              size="sm"
+              onClick={() => refresh(true)}
+              isDisabled={loading}
+            />
             <Button
+              display={{ base: "none", sm: "inline-flex" }}
               leftIcon={loading ? <Spinner size="sm" /> : <Icon as={FaSync} />}
               size="sm"
-              onClick={fetchWeatherData}
+              onClick={() => refresh(true)}
               isDisabled={loading}
             >
-              Refresh
+              {t("header.refresh")}
             </Button>
 
             <IconButton
+              aria-label={t("header.toggleColorMode")}
               icon={colorMode === "dark" ? <FaSun /> : <FaMoon />}
               onClick={toggleColorMode}
               size="sm"
             />
-          </HStack>
-        </HStack>
+          </Wrap>
+        </Wrap>
 
-        {error && (
-          <Alert status="error" mb={6}>
-            <AlertIcon />
-            <AlertTitle>Network Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+        <Tabs index={tab} onChange={setTab} isLazy variant="soft-rounded" colorScheme="blue" size="sm">
+          <TabList mb={6}>
+            <Tab>{t("tab.live")}</Tab>
+            <Tab>{t("tab.history")}</Tab>
+          </TabList>
 
-        {/* Latest Measurements */}
-        <Box overflowX="auto" mb={8}>
-          <SimpleGrid minChildWidth="140px" spacing={4}>
-            <MetricCard
-              title="Temperature"
-              value={latest.temperature}
-              unit="°C"
-              icon={FaTemperatureHigh}
-              color="teal.500"
-            />
-            <MetricCard
-              title="Temp2"
-              value={latest.temp2}
-              unit="°C"
-              icon={FaTemperatureHigh}
-              color="blue.500"
-            />
-            <MetricCard
-              title="PM2.5"
-              value={latest.pm25}
-              unit="µg/m³"
-              icon={FaSmog}
-              color="red.500"
-            />
-            <MetricCard
-              title="NO2"
-              value={latest.no2}
-              unit="ppb"
-              icon={FaWind}
-              color="blue.500"
-            />
-            <MetricCard
-              title="Humidity"
-              value={latest.humidity}
-              unit="%"
-              icon={FaTint}
-              color="purple.500"
-            />
-            <MetricCard
-              title="Pressure"
-              value={latest.hPa}
-              unit="hPa"
-              icon={FaTemperatureHigh}
-              color="orange.500"
-            />
-          </SimpleGrid>
-        </Box>
+          <TabPanels>
+            <TabPanel p={0}>
+              {error && (
+                <Alert status="error" mb={6}>
+                  <AlertIcon />
+                  <AlertTitle>{t("error.title")}</AlertTitle>
+                  <AlertDescription>{t("error.description")}</AlertDescription>
+                </Alert>
+              )}
 
-        {/* Charts */}
-        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
-          <MetricChart title="Temperature" metricKey="temperature" historyData={history} color="teal.500" bg={bg} textColor={textColor} />
-          <MetricChart title="Temp2" metricKey="temp2" historyData={history} color="blue.500" bg={bg} textColor={textColor} />
-          <MetricChart title="PM2.5" metricKey="pm25" historyData={history} color="red.500" bg={bg} textColor={textColor} />
-          <MetricChart title="NO2" metricKey="no2" historyData={history} color="blue.500" bg={bg} textColor={textColor} />
-          <MetricChart title="Humidity" metricKey="humidity" historyData={history} color="purple.500" bg={bg} textColor={textColor} />
-          <MetricChart title="Pressure" metricKey="hPa" historyData={history} color="orange.500" bg={bg} textColor={textColor} />
-        </SimpleGrid>
+              {/* Latest Measurements */}
+              <SimpleGrid columns={{ base: 2, sm: 3, lg: 6 }} spacing={{ base: 3, md: 4 }} mb={8}>
+                {METRICS.map((metric) => (
+                  <MetricCard
+                    key={metric.key}
+                    metric={metric}
+                    value={latest?.[metric.key]}
+                    trend={latestTime === null ? null : getTrend(pointsByKey[metric.key], latest[metric.key], latestTime, metric)}
+                    sparkPoints={pointsInWindow(pointsByKey[metric.key], sparkWindow)}
+                    loading={loading}
+                  />
+                ))}
+              </SimpleGrid>
+
+              {/* Charts */}
+              <SimpleGrid columns={{ base: 1, md: 2 }} spacing={8}>
+                {METRICS.map((metric) => (
+                  <MetricChart
+                    key={metric.key}
+                    metric={metric}
+                    points={pointsByKey[metric.key]}
+                    window={liveWindow}
+                    loading={loading}
+                  />
+                ))}
+              </SimpleGrid>
+            </TabPanel>
+
+            <TabPanel p={0}>
+              <HistoryView />
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
       </Box>
     </Box>
   );
@@ -206,7 +206,9 @@ const theme = extendTheme({
 export default function App() {
   return (
     <ChakraProvider theme={theme}>
-      <Dashboard />
+      <LanguageProvider>
+        <Dashboard />
+      </LanguageProvider>
     </ChakraProvider>
   );
 }
